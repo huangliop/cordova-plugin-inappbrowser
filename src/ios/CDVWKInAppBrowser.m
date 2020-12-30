@@ -572,9 +572,14 @@ static CDVWKInAppBrowser* instance = nil;
              }
          }
         //修复支付宝支付后不回到App的问题
-         if (appScheme!=nil&&([scheme isEqualToString:@"alipay"]||[scheme isEqualToString:@"alipays"])) {
-             NSString* newUrl=[url.absoluteString stringByReplacingOccurrencesOfString:@"alipays" withString:appScheme       ];
-             [self openInSystem:[NSURL URLWithString:newUrl]];
+         if ([navigationAction.request.URL.scheme isEqualToString:@"alipay"]) {
+            NSArray *urlBaseArr = [navigationAction.request.URL.absoluteString componentsSeparatedByString:@"?"];
+            NSString *urlBaseStr = urlBaseArr.firstObject;
+            NSString *urlNeedDecode = urlBaseArr.lastObject;
+            NSMutableString *afterDecodeStr = [NSMutableString stringWithString:[self decoderUrlEncodeStr:urlNeedDecode]];
+            NSString *afterHandleStr = [afterDecodeStr stringByReplacingOccurrencesOfString:@"alipays" withString:appScheme];
+            NSString *finalStr = [NSString stringWithFormat:@"%@?%@",urlBaseStr, [self urlEncodeStr:afterHandleStr]];
+             [self openInSystem:[NSURL URLWithString:finalStr]];
              shouldStart=NO;
              return;
          }
@@ -607,7 +612,20 @@ static CDVWKInAppBrowser* instance = nil;
         decisionHandler(WKNavigationActionPolicyCancel);
     }
 }
-
+//urlEncode编码
+- (NSString *)urlEncodeStr:(NSString *)input {
+    NSString *charactersToEscape = @"?!@#$^&%*+,:;='\"`<>()[]{}/\\| ";
+    NSCharacterSet *allowedCharacters = [[NSCharacterSet characterSetWithCharactersInString:charactersToEscape] invertedSet];
+    NSString *upSign = [input stringByAddingPercentEncodingWithAllowedCharacters:allowedCharacters];
+    return upSign;
+}
+//urlEncode解码
+- (NSString *)decoderUrlEncodeStr: (NSString *) input {
+    NSMutableString *outputStr = [NSMutableString stringWithString:input];
+    [outputStr replaceOccurrencesOfString:@"+" withString:@"" options:NSLiteralSearch range:NSMakeRange(0,[outputStr length])];
+    return [outputStr stringByRemovingPercentEncoding];
+}
+//获得配置的UrlTypes
 - (NSString*) getBackAppSchemeURL:(NSString*)key
 {
     if ([[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleURLTypes"]) {
