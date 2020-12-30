@@ -39,6 +39,7 @@ This plugin provides a web browser view that displays when calling `cordova.InAp
 
     本插件检查支付宝和微信的H5网页支付，如果要支持支付后能正确回到app请添加URLTypes。例子如下：
     `mayapp`可以替换为自己的。
+    
     ```
        <config-file parent="CFBundleURLTypes" target="*-Info.plist">
             <array>
@@ -53,7 +54,9 @@ This plugin provides a web browser view that displays when calling `cordova.InAp
             </array>
         </config-file>
         ```
+        
      如果build后，出现多个相同URLType，可以使用`cordova-custom-config`插件做如下配置。
+     
      ```
              <custom-config-file parent="CFBundleURLTypes" target="*-Info.plist">
             <array>
