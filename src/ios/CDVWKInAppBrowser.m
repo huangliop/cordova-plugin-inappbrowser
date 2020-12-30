@@ -536,10 +536,48 @@ static CDVWKInAppBrowser* instance = nil;
         [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
     }
+    NSURLRequest* request= navigationAction.request;
+    NSString* scheme= [request.URL scheme];
+    NSString* appScheme=[self getBackAppSchemeURL:@"backAppScheme"];
+    NSString* absoluteString = [navigationAction.request.URL.absoluteString stringByRemovingPercentEncoding];
+    NSLog(@"Current URL is %@",absoluteString);
     
+    static NSString* endPayRedirectURL = nil;
+    
+    // Wechat Pay, Note : modify redirect_url to resolve we couldn't return our app from wechat client.
+    if (appScheme!=nil&&[absoluteString hasPrefix:@"https://wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb"] && ![absoluteString hasSuffix:[NSString stringWithFormat:@"redirect_url=%@://",appScheme]]) {
+        decisionHandler(WKNavigationActionPolicyCancel);
+        NSString *redirectUrl = nil;
+        if ([absoluteString containsString:@"redirect_url="]) {
+            NSRange redirectRange = [absoluteString rangeOfString:@"redirect_url"];
+            endPayRedirectURL =  [absoluteString substringFromIndex:redirectRange.location+redirectRange.length+1];
+            redirectUrl = [[absoluteString substringToIndex:redirectRange.location] stringByAppendingString:[NSString stringWithFormat:@"redirect_url=%@://",appScheme]];
+        }else {
+            redirectUrl = [absoluteString stringByAppendingString:[NSString stringWithFormat:@"&redirect_url=%@://",appScheme]];
+        }
+        
+        NSMutableURLRequest *newRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:redirectUrl] cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:60];
+        newRequest.allHTTPHeaderFields = request.allHTTPHeaderFields;
+        newRequest.URL = [NSURL URLWithString:redirectUrl];
+        [theWebView loadRequest:newRequest];
+        return;
+    }
     //if is an app store link, let the system handle it, otherwise it fails to load it
     if ([[ url scheme] isEqualToString:@"weixin"] || [[ url scheme] isEqualToString:@"alipay"]|| [[ url scheme] isEqualToString:@"itms-apps"]|| [[ url scheme] isEqualToString:@"itms-apps"]) {
         [theWebView stopLoading];
+        //修复微信支付后不回到app的问题
+        if ([scheme isEqualToString:@"weixin"]) {
+             if (endPayRedirectURL) {
+                 [theWebView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:endPayRedirectURL] cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:60]];
+             }
+         }
+        //修复支付宝支付后不回到App的问题
+         if (appScheme!=nil&&([scheme isEqualToString:@"alipay"]||[scheme isEqualToString:@"alipays"])) {
+             NSString* newUrl=[url.absoluteString stringByReplacingOccurrencesOfString:@"alipays" withString:appScheme       ];
+             [self openInSystem:[NSURL URLWithString:newUrl]];
+             shouldStart=NO;
+             return;
+         }
         [self openInSystem:url];
         shouldStart = NO;
     }
@@ -567,6 +605,22 @@ static CDVWKInAppBrowser* instance = nil;
         }
     }else{
         decisionHandler(WKNavigationActionPolicyCancel);
+    }
+}
+
+- (NSString*) getBackAppSchemeURL:(NSString*)key
+{
+    if ([[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleURLTypes"]) {
+        NSArray* types=[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleURLTypes"];
+        for (NSDictionary* urlType in types) {
+            if (urlType[@"CFBundleURLName"]) {
+                NSString* name=urlType[@"CFBundleURLName"];
+                NSArray *schemes=urlType[@"CFBundleURLSchemes"];
+                if ([name isEqualToString:key]) {
+                    return schemes[0];
+                }
+            }
+        }
     }
 }
 
